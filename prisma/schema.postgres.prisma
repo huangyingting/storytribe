@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                      String              @id @default(cuid())
+  name                    String?
+  username                String?             @unique
+  email                   String              @unique
+  emailVerified           DateTime?
+  image                   String?
+  bio                     String?
+  passwordHash            String?
+  role                    String              @default("USER")
+  hasCompletedOnboarding  Boolean             @default(true)
+  aiCredits               Int                 @default(100)
+  plan                    String              @default("CREATOR_PRO")
+  notificationPrefsJson   String              @default("{\"comments\":true,\"shares\":true,\"product\":true}")
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  accounts                Account[]
+  sessions                Session[]
+  sentInvitations         AccountInvitation[] @relation("InvitedByUser")
+  acceptedInvitation      AccountInvitation?  @relation("AcceptedByUser")
+  auditLogs               AuditLog[]
+  ownedWorkspaces         Workspace[]         @relation("WorkspaceOwner")
+  workspaceMemberships    WorkspaceMember[]
+  projects                Project[]
+  projectGuests           ProjectGuest[]
+  elements                ProjectElement[]
+  propertyDefinitions     PropertyDefinition[]
+  comments                Comment[]
+  aiGenerations           AiGeneration[]
+  videoProjects           VideoProject[]
+  savedItems              SavedItem[]
+  followers               UserFollow[]        @relation("FollowingUser")
+  following               UserFollow[]        @relation("FollowerUser")
+  notifications           Notification[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model AccountInvitation {
+  id               String    @id @default(cuid())
+  email            String
+  normalizedEmail  String
+  tokenHash        String?   @unique
+  role             String    @default("USER")
+  status           String    @default("PENDING")
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  revokedAt        DateTime?
+  notes            String?
+  invitedById      String?
+  invitedBy        User?     @relation("InvitedByUser", fields: [invitedById], references: [id], onDelete: SetNull)
+  acceptedByUserId String?   @unique
+  acceptedByUser   User?     @relation("AcceptedByUser", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([normalizedEmail])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String?
+  targetType String?
+  targetId   String?
+  details    String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([action])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model Workspace {
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  description         String?
+  avatarColor         String               @default("#2563EB")
+  ownerId             String
+  owner               User                 @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  defaultWidth        Int                  @default(1920)
+  defaultHeight       Int                  @default(1080)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  members             WorkspaceMember[]
+  projects            Project[]
+  elements            ProjectElement[]
+  propertyDefinitions PropertyDefinition[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String    @default("MEMBER")
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
+}
+
+model Project {
+  id                     String           @id @default(cuid())
+  title                  String           @default("Untitled Storyboard")
+  synopsis               String           @default("")
+  coverImage             String?
+  coverPalette           String           @default("aura-warm")
+  ownerId                String
+  owner                  User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  workspaceId            String?
+  workspace              Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  width                  Int              @default(1920)
+  height                 Int              @default(1080)
+  annotationFieldsJson   String           @default("[\"visualdetail\",\"dialogue\",\"cameraangle\",\"shotsize\",\"movement\"]")
+  scenesJson             String           @default("[]")
+  stageOrderJson         String           @default("[]")
+  shareToken             String           @unique @default(cuid())
+  isPublic               Boolean          @default(false)
+  shareAccess            String           @default("off")
+  isPublishedToCommunity Boolean          @default(false)
+  likesCount             Int              @default(0)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  stages                 Stage[]
+  guests                 ProjectGuest[]
+  comments               Comment[]
+  elements               ProjectElement[]
+  videoProject           VideoProject?
+
+  @@index([ownerId])
+  @@index([workspaceId])
+  @@index([updatedAt])
+}
+
+model Stage {
+  id               String   @id @default(cuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title            String   @default("Shot")
+  sortOrder        Int      @default(0)
+  bkgdColor        String   @default("#fffdf9")
+  width            Int      @default(1920)
+  height           Int      @default(1080)
+  annotationsJson  String   @default("{}")
+  scriptBlocksJson String   @default("[]")
+  objectsJson      String   @default("[]")
+  groupsJson       String   @default("{}")
+  thumbnailData    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([projectId, sortOrder])
+}
+
+model ProjectGuest {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  email      String
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  permission String   @default("VIEW")
+  createdAt  DateTime @default(now())
+
+  @@unique([projectId, email])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stageId    String?
+  authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String   @default("Collaborator")
+  content    String
+  x          Float?
+  y          Float?
+  resolved   Boolean  @default(false)
+  parentId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([stageId])
+}
+
+model ProjectElement {
+  id          String     @id @default(cuid())
+  ownerId     String
+  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  name        String
+  handle      String
+  category    String     @default("CHARACTER")
+  description String     @default("")
+  svgData     String     @default("{}")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([ownerId])
+  @@index([projectId])
+}
+
+model PropertyDefinition {
+  id          String     @id @default(cuid())
+  ownerId     String
+  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  key         String
+  label       String
+  type        String     @default("text")
+  category    String     @default("Camera & Lens")
+  optionsJson String     @default("[]")
+  isDefault   Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([ownerId])
+}
+
+model VideoProject {
+  id              String   @id @default(cuid())
+  projectId       String   @unique
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  framesJson      String   @default("[]")
+  settingsJson    String   @default("{\"defaultDuration\":3,\"transition\":\"none\",\"resolution\":\"1080p\",\"fps\":30,\"musicVolume\":80}")
+  voiceTracksJson String   @default("[]")
+  audioTracksJson String   @default("[]")
+  videoClipsJson  String   @default("[]")
+  shareToken      String   @unique @default(cuid())
+  isPublic        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AiGeneration {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String?
+  stageId        String?
+  generationType String   @default("IMAGE")
+  prompt         String
+  style          String   @default("Storyboard Sketch")
+  model          String   @default("Tribe-Vision-3")
+  aspectRatio    String   @default("16:9")
+  creditsUsed    Int      @default(1)
+  resultData     String   @default("{}")
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model SavedItem {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetType String   @default("PROJECT")
+  targetId   String
+  title      String
+  metaJson   String   @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, targetType, targetId])
+}
+
+model UserFollow {
+  id          String   @id @default(cuid())
+  followerId  String
+  follower    User     @relation("FollowerUser", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   User     @relation("FollowingUser", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   @default("SYSTEM")
+  title     String
+  message   String
+  linkUrl   String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}

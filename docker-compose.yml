@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: storytribe
+      POSTGRES_PASSWORD: storytribe_password
+      POSTGRES_DB: storytribe_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://storytribe:storytribe_password@postgres:5432/storytribe_prod?schema=public"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:-replace-with-strong-32-byte-secret}"
+      ACCOUNT_ADMISSION_MODE: "invitation-only"
+
+volumes:
+  postgres_data:
